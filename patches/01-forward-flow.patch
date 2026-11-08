@@ -1,0 +1,117 @@
+diff --git a/submodules/TelegramUI/Sources/ChatControllerForwardMessages.swift b/submodules/TelegramUI/Sources/ChatControllerForwardMessages.swift
+index 7ec672a6..517ac8a0 100644
+--- a/submodules/TelegramUI/Sources/ChatControllerForwardMessages.swift
++++ b/submodules/TelegramUI/Sources/ChatControllerForwardMessages.swift
+@@ -119,6 +119,11 @@ extension ChatControllerImpl {
+                     guard let strongSelf = self else {
+                         return
+                     }
++                    let paperPlane = strongSelf.preparePaperPlaneForward(messageIds: Set(messages.map { $0.id }))
++                    var forwardsIntoCurrentChat = false
++                    if peerIds.count == 1, case .peer(peerIds[0]) = strongSelf.chatLocation {
++                        forwardsIntoCurrentChat = true
++                    }
+                     let renderedPeers = renderedPeers.compactMap({ $0 })
+                     
+                     var count: Int32 = Int32(messages.count)
+@@ -291,6 +296,7 @@ extension ChatControllerImpl {
+                                         return
+                                     }
+                                     
++                                    let presentToast: () -> Void = {
+                                     strongSelf.present(UndoOverlayController(presentationData: presentationData, content: .forward(savedMessages: savedMessages, text: text), elevatedLayout: false, position: savedMessages && messages.count > 0 ? .top : .bottom, animateInAsReplacement: true, action: { action in
+                                         if savedMessages, let self, action == .info {
+                                             let _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: self.context.account.peerId))
+@@ -306,6 +312,14 @@ extension ChatControllerImpl {
+                                         }
+                                         return false
+                                     }, additionalView: (savedMessages && messages.count > 0) ? chatShareToSavedMessagesAdditionalView(strongSelf, reactionItems: reactionItems, correlationIds: correlationIds) : nil), in: .current)
++                                    }
++                                    if forwardsIntoCurrentChat {
++                                        // The new message is the confirmation.
++                                    } else if let paperPlane {
++                                        paperPlane(savedMessages && messages.count > 0 ? .top : .bottom, presentToast, nil)
++                                    } else {
++                                        presentToast()
++                                    }
+                                 })
+                                 
+                                 if displayConvertingTooltip {
+@@ -315,7 +329,16 @@ extension ChatControllerImpl {
+                         
+                         switch mode {
+                         case .generic:
+-                            commit(result)
++                            if forwardsIntoCurrentChat, let paperPlane {
++                                strongSelf.updateChatPresentationInterfaceState(animated: true, interactive: true, { $0.updatedInterfaceState { $0.withoutSelectionState() } })
++                                // Hold on to the chat until the plane lands.
++                                paperPlane(.inChat, {}, { [strongSelf] in
++                                    _ = strongSelf
++                                    commit(result)
++                                })
++                            } else {
++                                commit(result)
++                            }
+                         case .silent:
+                             let transformedMessages = strongSelf.transformEnqueueMessages(result, silentPosting: true)
+                             commit(transformedMessages)
+@@ -364,6 +387,11 @@ extension ChatControllerImpl {
+                     strongSelf.updateChatPresentationInterfaceState(animated: false, interactive: true, { $0.updatedInterfaceState({ $0.withUpdatedForwardMessageIds(nil).withUpdatedForwardOptionsState(nil) }) })
+                 }
+                 
++                if threadId == nil, let multiplePeersSelected = strongController.multiplePeersSelected {
++                    multiplePeersSelected([peer], [peer.id: peer], NSAttributedString(), .generic, nil, nil)
++                    return
++                }
++
+                 var isPinnedMessages = false
+                 if case .pinnedMessages = strongSelf.presentationInterfaceState.subject {
+                     isPinnedMessages = true
+@@ -377,7 +405,7 @@ extension ChatControllerImpl {
+                     }
+                 }
+                 
+-                if case .peer(peerId) = strongSelf.chatLocation, strongSelf.parentController == nil, !isPinnedMessages {
++                if case .peer(peerId) = strongSelf.chatLocation, peerId != accountPeerId, strongSelf.parentController == nil, !isPinnedMessages {
+                     strongSelf.updateChatPresentationInterfaceState(animated: false, interactive: true, { $0.updatedInterfaceState({ $0.withUpdatedForwardMessageIds(messages.map { $0.id }).withUpdatedForwardOptionsState(ChatInterfaceForwardOptionsState(hideNames: !hasNotOwnMessages, hideCaptions: false, unhideNamesOnCaptionChange: false)).withoutSelectionState() }).updatedSearch(nil) })
+                     strongSelf.updateItemNodesSearchTextHighlightStates()
+                     strongSelf.searchResultsController = nil
+@@ -386,6 +414,8 @@ extension ChatControllerImpl {
+                     Queue.mainQueue().after(0.88) {
+                         strongSelf.chatDisplayNode.hapticFeedback.success()
+                     }
++
++                    let paperPlane = strongSelf.preparePaperPlaneForward(messageIds: Set(messages.map { $0.id }))
+                     
+                     let reactionItems: Signal<[ReactionItem], NoError>
+                     if messages.count > 0 {
+@@ -408,6 +438,7 @@ extension ChatControllerImpl {
+                         }
+                         
+                         let presentationData = strongSelf.context.sharedContext.currentPresentationData.with { $0 }
++                        let presentToast: () -> Void = {
+                         strongSelf.present(UndoOverlayController(presentationData: presentationData, content: .forward(savedMessages: true, text: messages.count == 1 ? presentationData.strings.Conversation_ForwardTooltip_SavedMessages_One : presentationData.strings.Conversation_ForwardTooltip_SavedMessages_Many), elevatedLayout: false, position: .top, animateInAsReplacement: true, action: { [weak self] value in
+                             if case .info = value, let strongSelf = self {
+                                 let _ = (strongSelf.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: strongSelf.context.account.peerId))
+@@ -422,6 +453,12 @@ extension ChatControllerImpl {
+                             }
+                             return false
+                         }, additionalView: messages.count > 0 ? chatShareToSavedMessagesAdditionalView(strongSelf, reactionItems: reactionItems, correlationIds: correlationIds) : nil), in: .current)
++                        }
++                        if let paperPlane {
++                            paperPlane(.top, presentToast, nil)
++                        } else {
++                            presentToast()
++                        }
+                     })
+                     
+                     let _ = (enqueueMessages(account: strongSelf.context.account, peerId: peerId, messages: mappedMessages)
+@@ -450,6 +487,8 @@ extension ChatControllerImpl {
+                     })
+                     strongSelf.updateChatPresentationInterfaceState(animated: false, interactive: true, { $0.updatedInterfaceState({ $0.withoutSelectionState() }) })
+                     strongController.dismiss()
++                } else if threadId == nil, let multiplePeersSelected = strongController.multiplePeersSelected {
++                    multiplePeersSelected([peer], [peer.id: peer], NSAttributedString(), .generic, nil, nil)
+                 } else {
+                     if let navigationController = strongSelf.navigationController as? NavigationController {
+                         for controller in navigationController.viewControllers {

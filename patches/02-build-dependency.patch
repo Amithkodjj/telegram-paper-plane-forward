@@ -1,0 +1,12 @@
+diff --git a/submodules/TelegramUI/BUILD b/submodules/TelegramUI/BUILD
+index 116004c3..34c49d91 100644
+--- a/submodules/TelegramUI/BUILD
++++ b/submodules/TelegramUI/BUILD
+@@ -445,6 +445,7 @@ swift_library(
+         "//submodules/TelegramUI/Components/PeerAllowedReactionsScreen",
+         "//submodules/MetalEngine",
+         "//submodules/TelegramUI/Components/DustEffect",
++        "//submodules/TelegramUI/Components/Chat/PaperPlaneForward",
+         "//submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen",
+         "//submodules/TelegramUI/Components/Chat/ChatMessageSelectionInputPanelNode",
+         "//submodules/TelegramUI/Components/Chat/ChatQrCodeScreen",
